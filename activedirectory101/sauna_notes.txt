@@ -1,0 +1,50 @@
+so I did a quick classic nmap scan and saved the results... I tried acccessing port 80 and it worked... but before that i enumerated other ports as well and while doing that I got nothing interesting from port 135, 389 and 445 so I went to the port 80 where i obtained usernames of certain users... and using a tool called username anarchy I tried to make a list of usernames that would be used in an enterprise environ by actual users based on the real names i got... so I did that and now using getNPUsers.py(an impacket tool) i am going to see if as a non privileged user am able to get a hash of a user 
+
+i used the command ./username-anarchy --input-file names-new  --select-format first,first.last,first1,flast... to get the perfect format of usernames used in an actual enterprise environ...
+
+after using impacket-GetNPUsers I got  the password of the user *fsmith* as *Thestrokes23*
+
+now lets try and see what we can use this creds for by using cme... we are in we then send in sharphound so that we can get the graph of our environment... now after that we do  some manal enumeration... and we find that there are some cached winlogon credentials that exist and belong to svc_loanmgr 
+
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    AutoRestartShell    REG_DWORD    0x1
+    Background    REG_SZ    0 0 0
+    CachedLogonsCount    REG_SZ    10
+    DebugServerCommand    REG_SZ    no
+    DefaultDomainName    REG_SZ    EGOTISTICALBANK
+    DefaultUserName    REG_SZ    EGOTISTICALBANK\svc_loanmanager
+    DisableBackButton    REG_DWORD    0x1
+    EnableSIHostIntegration    REG_DWORD    0x1
+    ForceUnlockLogon    REG_DWORD    0x0
+    LegalNoticeCaption    REG_SZ
+    LegalNoticeText    REG_SZ
+    PasswordExpiryWarning    REG_DWORD    0x5
+    PowerdownAfterShutdown    REG_SZ    0
+    PreCreateKnownFolders    REG_SZ    {A520A1A4-1780-4FF6-BD18-167343C5AF16}
+    ReportBootOk    REG_SZ    1
+    Shell    REG_SZ    explorer.exe
+    ShellCritical    REG_DWORD    0x0
+    ShellInfrastructure    REG_SZ    sihost.exe
+    SiHostCritical    REG_DWORD    0x0
+    SiHostReadyTimeOut    REG_DWORD    0x0
+    SiHostRestartCountLimit    REG_DWORD    0x0
+    SiHostRestartTimeGap    REG_DWORD    0x0
+    Userinit    REG_SZ    C:\Windows\system32\userinit.exe,
+    VMApplet    REG_SZ    SystemPropertiesPerformance.exe /pagefile
+    WinStationsDisabled    REG_SZ    0
+    scremoveoption    REG_SZ    0
+    DisableCAD    REG_DWORD    0x1
+    LastLogOffEndTimePerfCounter    REG_QWORD    0x156458a35
+    ShutdownFlags    REG_DWORD    0x13
+    DisableLockWorkstation    REG_DWORD    0x0
+    DefaultPassword    REG_SZ    Moneymakestheworldgoround!
+
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\AlternateShells
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\GPExtensions
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserDefaults
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\AutoLogonChecked
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\VolatileUserMgrKey
+
+the password is Moneymakestheworldgoround! now since during manual enum we saw that our user was part of the windows remote management group it shows we can gain remote access through evil-winrm and thats what we'll do...! NOW after getting access remotely as svc_loanmgr on bloodhound we see that we have DCSync rights which means we can use either impacket-secretsdump to dump the hashes from the NTDS.dit including the administrator hash... then use impacket psexec to gain access through pth... or even use evil-winrm... like I transfered mimkatz.exe  to the machine and requested the hash belonging to the administrator and boom I got the hash now I used the hash to do a pth using evil-winrm and I got access as the administrator... now that was a really lovely box.. I needed hints though but it was lovely
+
+
